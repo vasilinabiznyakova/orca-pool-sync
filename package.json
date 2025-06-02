@@ -2,6 +2,7 @@
   "name": "orca-pool-sync",
   "version": "1.0.0",
   "description": "Service for syncing Orca Pools into PostgreSQL database.",
+  "private": true,
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
@@ -11,12 +12,16 @@
     "type": "git",
     "url": "git+https://github.com/vasilinabiznyakova/orca-pool-sync.git"
   },
-  "author": "",
-  "license": "ISC",
   "bugs": {
     "url": "https://github.com/vasilinabiznyakova/orca-pool-sync/issues"
   },
   "homepage": "https://github.com/vasilinabiznyakova/orca-pool-sync#readme",
+  "_moduleAliases": {
+    "@prisma": "src/prisma",
+    "@services": "src/services",
+    "@clients": "src/clients",
+    "@utils": "src/utils"
+  },
   "dependencies": {
     "@prisma/client": "^6.8.2",
     "axios": "^1.9.0",
