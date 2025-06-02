@@ -1,0 +1,92 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+
+model Pool {
+  address              String   @id
+  tick_spacing         Int
+  fee_rate             Int
+  liquidity            String?
+  sqrt_price           String
+  tick_current_index   Int?
+  token_mint_a         String
+  token_mint_b         String
+  token_vault_a        String?
+  token_vault_b        String?
+  has_warning          Boolean
+  price                Decimal? // numeric in PostgreSQL = Decimal in Prisma
+  tvl_usdc             Decimal
+  yield_over_tvl       Decimal
+  token_balance_a      Decimal?
+  token_balance_b      Decimal?
+  trade_enable_timestamp DateTime
+
+  tokenA Token @relation("TokenA", fields: [token_mint_a], references: [address])
+  tokenB Token @relation("TokenB", fields: [token_mint_b], references: [address])
+  stats  Stat[]
+  rewards Reward[]
+
+  @@map("pools")
+
+}
+
+model Token {
+  address     String  @id
+  program_id  String
+  image_url   String
+  name        String
+  symbol      String
+  decimals    Int
+
+  poolsA Pool[] @relation("TokenA")
+  poolsB Pool[] @relation("TokenB")
+
+  @@map("tokens") 
+}
+
+model Period {
+  code String @id // '24h', '7d', '30d', etc.
+  stats Stat[]
+
+  @@map("periods") 
+}
+
+model Stat {
+  id             Int      @id @default(autoincrement())
+  pool_address   String
+  period         String
+  volume         Decimal
+  fees           Decimal
+  rewards        Decimal
+  yield_over_tvl Decimal
+
+  pool   Pool   @relation(fields: [pool_address], references: [address])
+  periodRel Period @relation(fields: [period], references: [code])
+
+  @@map("stats") 
+}
+
+model Reward {
+  id                       Int      @id @default(autoincrement())
+  pool_address             String
+  mint                     String
+  vault                    String
+  growth_global_x64        String
+  active                   Boolean
+
+  pool   Pool @relation(fields: [pool_address], references: [address])
+
+  @@map("rewards") 
+}
