@@ -3,11 +3,13 @@ import pLimit from 'p-limit';
 
 const prisma = new PrismaClient({
   transactionOptions: {
-    maxWait: 30000,
-    timeout: 30000,
+    maxWait: 30000, // 30 seconds wait for the transaction to start
+    timeout: 30000, // 30 seconds maximum per transaction
   },
 });
-const limit = pLimit(3); // 3 parallel chunks
+
+// Parallel chunks
+const limit = pLimit(3);
 
 function chunkArray<T>(array: T[], size: number): T[][] {
   const result: T[][] = [];
@@ -23,7 +25,7 @@ async function safeUpsert(fn: () => Promise<any>, logContext: string) {
   } catch (error) {
     const err = error as Error;
     console.error(`❌ Error during upsert ${logContext}:`, err.message || err);
-    console.error(err.stack);
+    // TO_DO add error.stack
   }
 }
 
@@ -70,9 +72,7 @@ async function processPoolChunk(poolChunk: any[], chunkIndex: number) {
       price: pool.price ?? null,
       tvl_usdc: pool.tvlUsdc ?? null,
       yield_over_tvl: pool.yieldOverTvl ?? null,
-      trade_enable_timestamp: pool.tradeEnableTimestamp
-        ? pool.tradeEnableTimestamp
-        : '',
+      trade_enable_timestamp: pool.tradeEnableTimestamp || '',
       token_mint_a: pool.tokenMintA,
       token_mint_b: pool.tokenMintB,
       token_vault_a: pool.tokenVaultA,
@@ -113,133 +113,128 @@ async function processPoolChunk(poolChunk: any[], chunkIndex: number) {
 
   const tokens = Array.from(tokensMap.values());
 
-  // 1. First tokens - in the transaction
-  await prisma.$transaction(async (tx) => {
-    await Promise.all(
-      tokens.map((token) =>
-        safeUpsert(
-          () =>
-            tx.token.upsert({
-              where: { address: token.address },
-              update: {
-                program_id: token.program_id,
-                image_url: token.image_url,
-                name: token.name,
-                symbol: token.symbol,
-                decimals: token.decimals,
-              },
-              create: token,
-            }),
-          `token ${token.address}`
-        )
-      )
+  // Sort tokens by address to minimize deadlock
+  tokens.sort((a, b) => a.address.localeCompare(b.address));
+
+  // 1. Tokens - no transaction one by one
+  for (const token of tokens) {
+    await safeUpsert(
+      () =>
+        prisma.token.upsert({
+          where: { address: token.address },
+          update: {
+            program_id: token.program_id,
+            image_url: token.image_url,
+            name: token.name,
+            symbol: token.symbol,
+            decimals: token.decimals,
+          },
+          create: token,
+        }),
+      `token ${token.address}`
     );
-  });
+  }
 
-  // 2. Now the pools - we are waiting for the end
-  await Promise.all(
-    pools.map((pool) =>
-      safeUpsert(
-        () =>
-          prisma.pool.upsert({
-            where: { address: pool.address },
-            update: {
-              fee_rate: pool.fee_rate,
-              liquidity: pool.liquidity,
-              sqrt_price: pool.sqrt_price,
-              tick_current_index: pool.tick_current_index,
-              has_warning: pool.has_warning,
-              price: pool.price,
-              tvl_usdc: pool.tvl_usdc,
-              yield_over_tvl: pool.yield_over_tvl,
-              trade_enable_timestamp: pool.trade_enable_timestamp,
+  // 2. Pools - sequentially
+  for (const pool of pools) {
+    await safeUpsert(
+      () =>
+        prisma.pool.upsert({
+          where: { address: pool.address },
+          update: {
+            fee_rate: pool.fee_rate,
+            liquidity: pool.liquidity,
+            sqrt_price: pool.sqrt_price,
+            tick_current_index: pool.tick_current_index,
+            has_warning: pool.has_warning,
+            price: pool.price,
+            tvl_usdc: pool.tvl_usdc,
+            yield_over_tvl: pool.yield_over_tvl,
+            trade_enable_timestamp: pool.trade_enable_timestamp,
+          },
+          create: {
+            address: pool.address,
+            tick_spacing: pool.tick_spacing,
+            fee_rate: pool.fee_rate,
+            liquidity: pool.liquidity,
+            sqrt_price: pool.sqrt_price,
+            tick_current_index: pool.tick_current_index,
+            has_warning: pool.has_warning,
+            price: pool.price,
+            tvl_usdc: pool.tvl_usdc,
+            yield_over_tvl: pool.yield_over_tvl,
+            trade_enable_timestamp: pool.trade_enable_timestamp,
+            token_vault_a: pool.token_vault_a,
+            token_vault_b: pool.token_vault_b,
+            token_balance_a: pool.token_balance_a,
+            token_balance_b: pool.token_balance_b,
+            tokenA: {
+              connect: { address: pool.token_mint_a },
             },
-            create: {
-              address: pool.address,
-              tick_spacing: pool.tick_spacing,
-              fee_rate: pool.fee_rate,
-              liquidity: pool.liquidity,
-              sqrt_price: pool.sqrt_price,
-              tick_current_index: pool.tick_current_index,
-              has_warning: pool.has_warning,
-              price: pool.price,
-              tvl_usdc: pool.tvl_usdc,
-              yield_over_tvl: pool.yield_over_tvl,
-              trade_enable_timestamp: pool.trade_enable_timestamp,
-              token_vault_a: pool.token_vault_a,
-              token_vault_b: pool.token_vault_b,
-              token_balance_a: pool.token_balance_a,
-              token_balance_b: pool.token_balance_b,
-              tokenA: {
-                connect: { address: pool.token_mint_a },
-              },
-              tokenB: {
-                connect: { address: pool.token_mint_b },
-              },
+            tokenB: {
+              connect: { address: pool.token_mint_b },
             },
-          }),
-        `pool ${pool.address}`
-      )
-    )
-  );
+          },
+        }),
+      `pool ${pool.address}`
+    );
+  }
 
-  // 3. Now you can safely insert rewards
-  await Promise.all(
-    rewards.map((reward) =>
-      safeUpsert(
-        () =>
-          prisma.reward.upsert({
-            where: {
-              pool_address_mint: {
-                pool_address: reward.pool_address,
-                mint: reward.mint,
-              },
+  // 3. Rewards - sequentially
+  for (const reward of rewards) {
+    await safeUpsert(
+      () =>
+        prisma.reward.upsert({
+          where: {
+            pool_address_mint: {
+              pool_address: reward.pool_address,
+              mint: reward.mint,
             },
-            update: {
-              vault: reward.vault,
-              growth_global_x64: reward.growth_global_x64,
-              active: reward.active,
-            },
-            create: reward,
-          }),
-        `reward ${reward.pool_address}/${reward.mint}`
-      )
-    )
-  );
+          },
+          update: {
+            vault: reward.vault,
+            growth_global_x64: reward.growth_global_x64,
+            active: reward.active,
+          },
+          create: reward,
+        }),
+      `reward ${reward.pool_address}/${reward.mint}`
+    );
+  }
 
-  // 4. And then stats
-  await Promise.all(
-    stats.map((stat) =>
-      safeUpsert(
-        () =>
-          prisma.stat.upsert({
-            where: {
-              pool_address_period: {
-                pool_address: stat.pool_address,
-                period: stat.period,
-              },
+  // 4. Stats — sequentially
+  for (const stat of stats) {
+    await safeUpsert(
+      () =>
+        prisma.stat.upsert({
+          where: {
+            pool_address_period: {
+              pool_address: stat.pool_address,
+              period: stat.period,
             },
-            update: {
-              volume: stat.volume,
-              fees: stat.fees,
-              rewards: stat.rewards,
-              yield_over_tvl: stat.yield_over_tvl,
-            },
-            create: stat,
-          }),
-        `stat ${stat.pool_address}/${stat.period}`
-      )
-    )
-  );
+          },
+          update: {
+            volume: stat.volume,
+            fees: stat.fees,
+            rewards: stat.rewards,
+            yield_over_tvl: stat.yield_over_tvl,
+          },
+          create: stat,
+        }),
+      `stat ${stat.pool_address}/${stat.period}`
+    );
+  }
 
   console.log(`✅ Successfully processed chunk #${chunkIndex + 1}`);
 }
 
+// 🟢 Main function
 export async function upsertAllPoolsData(pools: any[]) {
   console.log(`🚀 Starting full upsert for ${pools.length} pools...`);
 
   const chunkSize = 500;
   const chunkedPools = chunkArray(pools, chunkSize);
+
   const upsertChunkPromises = chunkedPools.map((poolChunk, chunkIndex) =>
     limit(() => processPoolChunk(poolChunk, chunkIndex))
   );

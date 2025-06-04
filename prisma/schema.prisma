@@ -49,7 +49,7 @@ model Token {
   address     String  @id
   program_id  String
   image_url   String?
-  name        String
+  name        String?
   symbol      String?
   decimals    Int
 

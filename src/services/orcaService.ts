@@ -63,9 +63,9 @@ export async function fetchAllPools() {
 
       // here we need update pools in db
 
-      // await upsertAllPoolsData(data.data);
+      await upsertAllPoolsData(data.data);
       //TO_DO REMOVE
-      await upsertAllPoolsData([data.data[0]]);
+      // await upsertAllPoolsData([data.data[0]]);
 
       afterCursor = data.meta?.cursor?.next ?? null;
 
@@ -76,9 +76,9 @@ export async function fetchAllPools() {
       }
 
       page++;
-    // } while (afterCursor);
+    } while (afterCursor);
     //TO_DO REMOVE
-    } while (false);
+    // } while (false);
 
     console.log(`Total quantity of pools fetched: ${poolsQty}`);
   } catch (error) {

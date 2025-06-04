@@ -5,9 +5,12 @@ dotenv.config();
 
 async function bootstrap() {
   console.log('🚀 Starting Orca Pool Sync Service...');
-
+  console.time('⏱️ Initial Sync Time');
   await runInitialSync();
-  startCronJob();
+  console.timeEnd('⏱️ Initial Sync Time');
+
+  // TO_DO UNCOMMENT
+  // startCronJob();
 }
 
 bootstrap();
