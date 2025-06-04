@@ -34,7 +34,7 @@ npm install
 2. Generate Prisma Client:
 
 ```bash
-npx prisma generate
+npm run prepare
 ```
 
 This ensures the Prisma client is up to date with the latest schema.
