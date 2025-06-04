@@ -8,7 +8,8 @@
     "generate": "prisma generate",
     "prepare": "npm run generate",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "tsx src/index.ts"
+    "dev": "tsx src/index.ts",
+    "clean_db": "npx tsx src/utils/db_scripts.ts"
   },
   "repository": {
     "type": "git",

@@ -64,8 +64,6 @@ export async function fetchAllPools() {
       // here we need update pools in db
 
       await upsertAllPoolsData(data.data);
-      //TO_DO REMOVE
-      // await upsertAllPoolsData([data.data[0]]);
 
       afterCursor = data.meta?.cursor?.next ?? null;
 
@@ -77,8 +75,6 @@ export async function fetchAllPools() {
 
       page++;
     } while (afterCursor);
-    //TO_DO REMOVE
-    // } while (false);
 
     console.log(`Total quantity of pools fetched: ${poolsQty}`);
   } catch (error) {
@@ -86,46 +82,3 @@ export async function fetchAllPools() {
   }
 }
 
-export async function upsertRewards(pools: any[]) {
-  const rewards = [];
-
-  for (const pool of pools) {
-    if (pool.rewards && Array.isArray(pool.rewards)) {
-      for (const reward of pool.rewards) {
-        rewards.push({
-          pool_address: pool.address,
-          mint: reward.mint,
-          vault: reward.vault,
-          growth_global_x64: reward.growth_global_x64,
-          active: reward.active,
-        });
-      }
-    }
-  }
-
-  console.log(`🏆 Upserting ${rewards.length} rewards into DB...`);
-
-  if (rewards.length > 0) {
-    await prisma.$transaction(
-      rewards.map((reward) =>
-        prisma.reward.upsert({
-          where: {
-            pool_address_mint: {
-              // 👈 composite unique key: pool_address + mint
-              pool_address: reward.pool_address,
-              mint: reward.mint,
-            },
-          },
-          update: {
-            vault: reward.vault,
-            growth_global_x64: reward.growth_global_x64,
-            active: reward.active,
-          },
-          create: reward,
-        })
-      )
-    );
-  }
-
-  console.log(`✅ Rewards upsert complete.`);
-}

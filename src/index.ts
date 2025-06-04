@@ -9,8 +9,8 @@ async function bootstrap() {
   await runInitialSync();
   console.timeEnd('⏱️ Initial Sync Time');
 
-  // TO_DO UNCOMMENT
-  // startCronJob();
+
+  startCronJob();
 }
 
 bootstrap();

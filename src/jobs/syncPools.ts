@@ -16,7 +16,10 @@ export function startCronJob() {
   cron.schedule(cronExpression, async () => {
     console.log('🕒 Scheduled sync job started...');
     try {
+      console.time('Scheduled sync job');
       await fetchAllPools();
+      console.time('Scheduled sync job');
+
       console.log('✅ Scheduled sync job completed.');
     } catch (error) {
       console.error(`❌ Scheduled sync job failed:`, error);
